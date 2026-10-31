@@ -269,7 +269,7 @@ public static class ApplicationExtensions
     public static IHostApplicationBuilder ConfigureAuthentication(this IHostApplicationBuilder builder)
     {
         var setting = builder.Configuration.GetSection("Auth").Get<AuthSetting>()!;
-        var isDevelopment = builder.Environment.IsDevelopment();
+        var allowHttp = builder.Environment.IsDevelopment() || setting.AllowHttp;
 
         builder.Services
             .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -280,7 +280,7 @@ public static class ApplicationExtensions
                 options.SlidingExpiration = true;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = isDevelopment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = allowHttp ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
                 // API returns status code instead of redirect
                 options.Events = new CookieAuthenticationEvents

@@ -29,6 +29,13 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/docs/">
+    <File Path="docs/README.md" />
+    <File Path="docs/api.md" />
     <File Path="docs/architecture.md" />
+    <File Path="docs/configuration.md" />
+    <File Path="docs/development.md" />
+    <File Path="docs/hyperv.md" />
+    <File Path="docs/migration.md" />
+    <File Path="docs/operations.md" />
   </Folder>
 </Solution>

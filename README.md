@@ -1,216 +1,428 @@
-# HyperManager
+# 🖥️ HyperManager
 
-複数の Hyper-V ホストをまたいで仮想マシン（VM）を監視・操作する Web アプリケーションです。
-[hv-monitor](https://github.com/usausa/hv-monitor) の機能を、[template-blazor-server](https://github.com/usausa/template-blazor-server) の構成で再構築したものです。
+**複数の Hyper-V ホストにある仮想マシンを、ブラウザの 1 画面でまとめて監視・操作できるツールです。**
 
-各 Hyper-V ホスト上で動作する API サーバ（**HyperManager.Agent**）と、それらを 1 画面に統合表示する中央の Web UI（**HyperManager.Host**）の 2 種類のプロセスで構成します。
+ホストごとに Hyper-V マネージャーを開かなくても、すべての仮想マシンの状態確認と、開始・停止などの操作ができます。
 
-## アーキテクチャ
+---
 
-```
- Browser
-    |
-    v
-+-------------------------------------+
-| HyperManager.Host (Blazor Server)   |   central UI / login / operation history (SQLite)
-+-------------------------------------+
-    |  HTTP/REST + X-Api-Key            (parallel, one request per host)
-    +-------------------------+
-    v                         v
-+-----------------------+ +-----------------------+
-| HyperManager.Agent    | | HyperManager.Agent    |   Windows service on each Hyper-V host
-| (Minimal API)         | | (Minimal API)         |
-+-----------------------+ +-----------------------+
-    |  CIM                    |  CIM
- Hyper-V                   Hyper-V
-```
+## ✨ できること
 
-Host は全ホストへ並列に問い合わせ、結果を 1 つの表に統合表示します。1 ホストが到達不可でも他ホストは表示し、失敗したホストはカード上にエラーとして提示します。
-
-## 機能
-
-- 複数ホストの VM 一覧を 1 表に統合表示（ホスト・名前・状態・CPU・メモリ・稼働時間・バージョン）、ホスト／名前による絞り込みと列ソート
-- ホストメトリクスの表示（ホストごとの CPU 使用率・メモリ使用量・各固定ディスクの空き容量、管理者権限／到達可否のバッジ）
-- 自動更新（既定 10 秒間隔。Host 側で集約するため Agent への負荷はブラウザ数に依存しない）と手動更新
-- VM 操作: 開始 / 再開 / 一時停止 / 状態保存 / シャットダウン（正常終了）/ 強制停止（電源オフ）
-  - 状態に応じた操作ボタンの出し分け、操作前の確認ダイアログ、進捗表示、成否のスナックバー通知
-  - 操作は Administrator ロールのユーザーのみ実行可能
-- 操作履歴（実行日時・ユーザー・ホスト・VM・操作・結果）を SQLite に記録し、画面で検索・CSV 出力
-- ログイン認証（Cookie 認証、初期アカウントは設定ファイルから作成）
-- 運用機能（テンプレート由来）: Serilog によるログ、OpenTelemetry / Prometheus メトリクス、ヘルスチェック、CSP などのセキュリティヘッダー、Windows サービス／systemd 対応、Aspire AppHost による開発時の一括起動
-
-## プロジェクト構成
-
-| プロジェクト | TFM | 役割 | 参照 |
-|---|---|---|---|
-| `src/HyperManager.Contracts` | net10.0 | Agent API の契約（DTO・ルート・ヘッダー名） | なし |
-| `src/HyperManager.Core` | net10.0 | Host 側の業務ロジック（Agent クライアント、監視、VM 操作、操作履歴、アカウント、DB アクセス） | Contracts |
-| `src/HyperManager.Host` | net10.0 | 中央 Web UI（Blazor Server / MudBlazor）と Web API | Core |
-| `src/HyperManager.Agent` | net10.0-windows | 各 Hyper-V ホストの API サーバ（Minimal API、X-Api-Key 認証、CIM による Hyper-V アクセス） | Contracts |
-| `src/HyperManager.AppHost` | net10.0 | 開発用の Aspire AppHost（Agent と Host を同時に起動） | Agent, Host |
-| `tests/HyperManager.UnitTests` | net10.0 | Core / Host の単体テスト（bUnit を含む） | Core, Host |
-| `tests/HyperManager.IntegrationTests` | net10.0 | Host の結合テスト（認証・API・操作履歴） | Host |
-| `tests/HyperManager.AgentTests` | net10.0-windows | Agent の API テストと状態コード変換のテスト | Agent |
-| `tests/HyperManager.E2ETests` | net10.0 | Playwright による E2E テスト | Host |
-
-## 必要要件
-
-- **HyperManager.Agent を動かすホスト**: Windows 10/11 または Windows Server（Hyper-V の役割が有効）/ .NET 10 / VM 操作のため **管理者権限**（Windows サービスとして LocalSystem で動かすのが簡単です）
-- **HyperManager.Host を動かすホスト**: .NET 10（Windows 非依存）/ 管理者権限は不要
-
-## セットアップ
-
-### 1. HyperManager.Agent（各 Hyper-V ホストに配置）
-
-1. 発行します。
-
-   ```powershell
-   dotnet publish src/HyperManager.Agent -c Release -o C:\HyperManager\Agent
-   ```
-
-2. `appsettings.json` の `Agent:ApiKey` に、推測されない強いランダム値を設定します（ホストごとに別の値を推奨）。
-   **未設定のままでは起動しません。** 環境変数 `Agent__ApiKey` でも設定できます。
-3. 待ち受けポート（既定 `5100`）を必要に応じて変更し（`http_ports`）、ファイアウォールで開放します。
-4. Windows サービスとして登録・開始します（管理者の PowerShell）。
-
-   ```powershell
-   sc.exe create HyperManagerAgent binPath= "C:\HyperManager\Agent\HyperManager.Agent.exe" start= auto
-   sc.exe start HyperManagerAgent
-   ```
-
-疎通確認:
-
-```powershell
-curl http://localhost:5100/health                              # ヘルスチェック（認証不要、Hyper-V に接続できないと 503）
-curl -H "X-Api-Key: <KEY>" http://localhost:5100/api/snapshot  # ホスト情報・メトリクス・VM 一覧（JSON）
-```
-
-### 2. HyperManager.Host（中央に 1 つ配置）
-
-1. 発行します。
-
-   ```powershell
-   dotnet publish src/HyperManager.Host -c Release -o C:\HyperManager\Host
-   ```
-
-2. `appsettings.json` の `Agent:Hosts` に、各 Agent の `Name` / `Url` / `ApiKey` を登録します。
-
-   ```json
-   "Agent": {
-     "QueryTimeoutSeconds": 10,
-     "OperationTimeoutSeconds": 330,
-     "Hosts": [
-       { "Name": "Host A", "Url": "http://192.168.1.10:5100", "ApiKey": "key-a" },
-       { "Name": "Host B", "Url": "http://192.168.1.11:5100", "ApiKey": "key-b" }
-     ]
-   }
-   ```
-
-3. `Auth:InitialAccount` の初期アカウント（既定 `admin` / `admin`）を変更します。アカウントはデータベースが空のときだけ作成されます。
-4. 必要に応じて `Monitor` で自動更新を調整します（`Enable`: 既定 true、`IntervalSeconds`: 既定 10）。`Enable` を false にすると手動更新のみになります。
-5. 起動します（Windows サービス／systemd としても動作します）。既定のポートは `8080` です。
-
-## 開発時の起動
-
-### Aspire AppHost（推奨）
-
-`src/HyperManager.AppHost` をスタートアッププロジェクトにして起動すると、Agent と Host が同時に起動し、Aspire ダッシュボードでログ・トレース・メトリクスを確認できます。
-API キーは起動のたびに生成され、Agent と Host の両方に設定されます。VM を操作する場合は Visual Studio を管理者として実行してください。
-
-```powershell
-dotnet run --project src/HyperManager.AppHost
-```
-
-### 個別に起動
-
-```powershell
-# ターミナル A: Agent（http://localhost:5100、Swagger UI: /swagger）
-dotnet run --project src/HyperManager.Agent
-
-# ターミナル B: Host（http://localhost:8080）
-dotnet run --project src/HyperManager.Host
-```
-
-Development 環境では、Host に Local Agent（`http://localhost:5100` / API キー `change-me`）が登録済みです。
-
-## API
-
-### HyperManager.Agent
-
-`/health` と `/alive` を除く全エンドポイントで HTTP ヘッダー `X-Api-Key: <key>` を検証します。
-
-| メソッド | パス | 説明 | リクエスト |
-|---|---|---|---|
-| GET | `/health` | ヘルスチェック（Hyper-V への接続を含む、認証不要） | - |
-| GET | `/alive` | 生存確認（認証不要） | - |
-| GET | `/api/host` | ホスト情報 `{ name, isElevated }` | - |
-| GET | `/api/host/metrics` | ホストメトリクス `{ cpuUsagePercent, totalMemoryMb, usedMemoryMb, disks }` | - |
-| GET | `/api/snapshot` | ホスト情報＋メトリクス＋VM 一覧を一括取得（Host の定常取得はこれを使用） | - |
-| GET | `/api/vms` | VM 一覧 | - |
-| POST | `/api/vms/{id}/start` | 開始 | - |
-| POST | `/api/vms/{id}/resume` | 再開 | - |
-| POST | `/api/vms/{id}/pause` | 一時停止 | - |
-| POST | `/api/vms/{id}/save` | 状態保存 | - |
-| POST | `/api/vms/{id}/shutdown` | 正常シャットダウン | `{ "force": bool }`（省略時 false） |
-| POST | `/api/vms/{id}/turnoff` | 強制電源オフ | - |
-
-- 操作は完了まで待って 204 を返します。エラーは `ProblemDetails` で返します（認証失敗 401、VM 未検出 404、操作失敗 409、取得失敗 500）。
-- `/api/snapshot` はホストメトリクスのみ取得できなかった場合、エラーにせず `metrics` を省略（null）して VM 一覧を返します。
-- Development 環境では OpenAPI（`/openapi/v1.json`）、Swagger UI（`/swagger`）、ReDoc（`/redoc`）を公開します。
-
-### HyperManager.Host
-
-ログイン（Cookie）が必要です。
-
-| メソッド | パス | 説明 |
+| | 機能 | 内容 |
 |---|---|---|
-| GET | `/api/operations?keyword=&page=&size=` | 操作履歴（新しい順、ホスト名・VM 名で部分一致検索） |
-| GET | `/api/operations/csv` | 操作履歴の CSV |
+| 👀 | まとめて見る | 全ホストの仮想マシンを 1 つの表に表示します。状態・CPU・メモリ・稼働時間がひと目で分かります |
+| 📊 | ホストの負荷を見る | ホストごとに CPU・メモリ・ディスクの使用率をゲージで表示します |
+| 🎛️ | 操作する | 開始・再開・一時停止・状態保存・シャットダウン・強制停止。実行前に確認ダイアログが出ます |
+| 🔄 | いつも最新 | 10 秒ごとに自動で更新します。開いている全員の画面に同じ情報が届きます |
+| 📜 | 履歴が残る | 「いつ・誰が・どの仮想マシンに・何をしたか」を記録します。検索や CSV 出力もできます |
+| 🔐 | ログインで守る | ログインした人だけが使えます。仮想マシンの操作は管理者だけが行えます |
 
-## セキュリティ
+---
 
-- Host はログイン認証（Cookie）を行い、VM 操作は Administrator ロールに限定します。
-- Host ↔ Agent は **API キー**（`X-Api-Key`、定数時間比較）で認証します。キーはホストごとに別の強いランダム値を設定してください。
-- 通信は HTTP を前提にしています。API キーは平文で流れるため、**信頼できるネットワーク内での利用**を前提とし、必要に応じてリバースプロキシ等で HTTPS 化してください（Agent の URL はパス付きでも登録できます）。
-- Agent は VM 操作のため管理者権限で動作します。Host は管理者権限不要です。
+## 🧩 しくみ
 
-## テスト
+HyperManager は 2 つのソフトウェアでできています。
 
-コマンドはリポジトリ直下で実行します。
-
-```powershell
-dotnet run --project tests/HyperManager.UnitTests
-dotnet run --project tests/HyperManager.IntegrationTests
-dotnet run --project tests/HyperManager.AgentTests
+```mermaid
+flowchart LR
+    U["👤 ブラウザ"] -- "HTTPS" --> M["🖥️ HyperManager<br/>中央の Web 画面"]
+    M -- "API キー付き HTTP" --> A1["🤖 Agent<br/>Hyper-V ホスト A"]
+    M -- "API キー付き HTTP" --> A2["🤖 Agent<br/>Hyper-V ホスト B"]
+    A1 --> V1["💻 仮想マシン"]
+    A2 --> V2["💻 仮想マシン"]
 ```
 
-E2E テスト（`tests/HyperManager.E2ETests`）は Playwright で動かします。Agent はスタブに置き換えるため Hyper-V は不要です。
+| | ソフトウェア | 入れる場所 | 役割 |
+|---|---|---|---|
+| 🖥️ | **HyperManager**（`HyperManager.Host`） | 管理用のサーバー 1 台 | 画面・ログイン・操作履歴 |
+| 🤖 | **Agent**（`HyperManager.Agent`） | 監視したい **Hyper-V ホストすべて** | Hyper-V から情報を集め、操作を実行する |
+
+> 💡 ブラウザがアクセスするのは HyperManager だけです。Agent は HyperManager からだけ呼び出されます。
+
+---
+
+## 📋 動作環境
+
+| | 🖥️ HyperManager | 🤖 Agent |
+|---|---|---|
+| OS | Windows または Linux | Windows 10 / 11（Pro 以上）、Windows Server（**Hyper-V が有効**） |
+| ランタイム | ASP.NET Core 10 ランタイム | ASP.NET Core 10 ランタイム |
+| 権限 | 一般ユーザーで動作 | **管理者権限**（Windows サービスとして動かせば満たせます） |
+| ポート（例） | 8443（HTTPS）または 8080（HTTP） | 5100 |
+| ブラウザ | Edge / Chrome / Firefox の最新版 | — |
+
+---
+
+## 🚀 導入手順
+
+> 📁 ここではすべて `C:\HyperManager` の下に置く例で説明します。
+
+### 1️⃣ 配布ファイルを作る
+
+ソースコードのフォルダで実行します（.NET 10 SDK が必要です）。
 
 ```powershell
-# ブラウザの入手(初回。ビルドで出力されるスクリプトを使う)
-dotnet build tests/HyperManager.E2ETests
-pwsh tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright.ps1 install
-
-# 実行(既定は Chromium・画面なし)
-dotnet run --project tests/HyperManager.E2ETests
-
-# 画面を出して実行
-$env:HEADED = "1"; dotnet run --project tests/HyperManager.E2ETests; Remove-Item Env:HEADED
+dotnet publish src/HyperManager.Agent -c Release -o publish\Agent
+dotnet publish src/HyperManager.Host -c Release -o publish\Host
 ```
 
-- 失敗したテストだけ、操作ごとの画面・DOM・通信・コンソールを記録したトレースを `tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright-traces/<テストの表示名>.zip` に残します。`pwsh tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright.ps1 show-trace <zip>` か https://trace.playwright.dev で開きます。
+> 💡 `-r win-x64 --self-contained` を付けると、配布先にランタイムを入れなくても動きます。
 
-## ビルド
+### 2️⃣ Agent を入れる（Hyper-V ホストごとに）
+
+**🔑 API キーを作る** — HyperManager が Agent を呼び出すときの合言葉です。ホストごとに別の値にしてください。
 
 ```powershell
-dotnet build HyperManager.slnx
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ($b | ForEach-Object { $_.ToString('x2') }) -join ''
 ```
 
-## ドキュメント
+**📂 ファイルを置く** — `publish\Agent` を `C:\HyperManager\Agent` にコピーし、同じフォルダに `appsettings.Production.json` を作ります。
 
-- 仕様: [docs/architecture.md](docs/architecture.md)
+```json
+{
+  "Agent": {
+    "ApiKey": "<作った API キー>"
+  }
+}
+```
 
-## 注意
+> ⚠️ API キーを設定しないと Agent は起動しません。
 
-- 「強制停止」はゲスト OS の電源を即座に切るため、未保存データが失われる可能性があります。
-- Agent が管理者権限なしで動作している場合、VM は一覧に表示されず（Hyper-V が返さないため）、ホストカードに「非管理者」と表示されます。
+**⚙️ Windows サービスとして登録する**（管理者の PowerShell）
+
+```powershell
+New-Service -Name HyperManagerAgent -DisplayName "HyperManager Agent" -BinaryPathName "C:\HyperManager\Agent\HyperManager.Agent.exe" -StartupType Automatic
+Start-Service HyperManagerAgent
+```
+
+**🧱 ファイアウォールを開ける** — 5100 番ポートを、HyperManager のサーバーからだけ許可します。
+
+```powershell
+New-NetFirewallRule -DisplayName "HyperManager Agent" -Direction Inbound -Protocol TCP -LocalPort 5100 -RemoteAddress <HyperManager サーバーの IP> -Action Allow
+```
+
+**✅ 動作を確かめる**
+
+```powershell
+curl.exe http://localhost:5100/health
+curl.exe -H "X-Api-Key: <作った API キー>" http://localhost:5100/api/host
+```
+
+`Healthy` と `{"name":"<ホスト名>","isElevated":true}` が返れば準備完了です。
+
+### 3️⃣ HyperManager を入れる（管理用サーバーに）
+
+**📂 ファイルを置く** — `publish\Host` を `C:\HyperManager\Host` にコピーし、同じフォルダに `appsettings.Production.json` を作ります。
+
+```json
+{
+  "Auth": {
+    "InitialAccount": { "Id": "admin", "Password": "<最初の管理者パスワード>" }
+  },
+  "Agent": {
+    "Hosts": [
+      { "Name": "Host A", "Url": "http://192.168.1.10:5100", "ApiKey": "<Host A の API キー>" },
+      { "Name": "Host B", "Url": "http://192.168.1.11:5100", "ApiKey": "<Host B の API キー>" }
+    ]
+  }
+}
+```
+
+| 項目 | 説明 |
+|---|---|
+| `Auth:InitialAccount` | 最初のログインアカウント（管理者）。**初回起動時に 1 度だけ**作られます |
+| `Agent:Hosts` | 監視するホストの一覧。`Name` は画面での表示名、`Url` は Agent のアドレス、`ApiKey` は手順 2️⃣ のキー |
+
+**🔒 通信の方法を選ぶ** — 本番では、ログイン情報を守るため**既定で HTTPS が必要**です（[🔒 HTTPS と HTTP](#-https-と-http)）。どちらかを選んで `appsettings.Production.json` に追加します。
+
+| | 方法 | こんなとき | 開く URL |
+|---|---|---|---|
+| 🅰️ | **HTTPS**（おすすめ） | 通常はこちら | `https://<サーバー名>:8443/` |
+| 🅱️ | **HTTP** | 信頼できるネットワーク内で、証明書を用意せずに使いたい | `http://<サーバー名>:8080/` |
+
+<details>
+<summary>🅰️ HTTPS にする</summary>
+
+社内 CA の証明書（PFX）があればそれを使ってください。ない場合は自己署名証明書を作れます（管理者の PowerShell）。
+
+```powershell
+New-Item -ItemType Directory -Force C:\HyperManager\cert
+$cert = New-SelfSignedCertificate -DnsName "hypermanager.example.local" -CertStoreLocation Cert:\LocalMachine\My -NotAfter (Get-Date).AddYears(5)
+Export-PfxCertificate -Cert $cert -FilePath C:\HyperManager\cert\hypermanager.pfx -Password (Read-Host -AsSecureString "PFX のパスワード")
+```
+
+> ⚠️ 自己署名証明書ではブラウザに警告が出ます。利用する PC で証明書を信頼済みにしてください。
+
+`appsettings.Production.json` に `Kestrel` を追加します。
+
+```json
+"Kestrel": {
+  "Endpoints": {
+    "Https": {
+      "Url": "https://*:8443",
+      "Certificate": { "Path": "C:\\HyperManager\\cert\\hypermanager.pfx", "Password": "<PFX のパスワード>" }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>🅱️ HTTP で使う</summary>
+
+`appsettings.Production.json` の `Auth` に `"AllowHttp": true` を追加します。HTTP の 8080 番で待ち受けます。
+
+```json
+"Auth": {
+  "AllowHttp": true,
+  "InitialAccount": { "Id": "admin", "Password": "<最初の管理者パスワード>" }
+}
+```
+
+> ⚠️ パスワードやログイン状態が暗号化されずに流れます。信頼できるネットワーク内だけで使ってください。
+
+</details>
+
+**⚙️ Windows サービスとして登録する**（管理者の PowerShell。ファイアウォールのポートは 🅰️ なら 8443、🅱️ なら 8080）
+
+```powershell
+New-Service -Name HyperManager -DisplayName "HyperManager" -BinaryPathName "C:\HyperManager\Host\HyperManager.Host.exe" -StartupType Automatic
+Start-Service HyperManager
+New-NetFirewallRule -DisplayName "HyperManager" -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow
+```
+
+### 4️⃣ ブラウザで開く 🎉
+
+🅰️ なら `https://<サーバー名>:8443/`、🅱️ なら `http://<サーバー名>:8080/` を開き、手順 3️⃣ で決めたアカウントでログインします。
+
+> 💡 設定は `appsettings.Production.json` に書いてください。新しい版の配布ファイルをコピーしても、このファイルは上書きされません。
+
+---
+
+## 🖱️ 使い方
+
+### 🔑 ログイン
+
+ID とパスワードを入力して［ログイン］を押します。右上にユーザー名とログアウトボタンが表示されます。
+左上の ☰ でメニューの開閉、メニューから「仮想マシン」と「操作履歴」を切り替えます。
+
+### 🖥️ 仮想マシン画面
+
+トップページです。上から順に次の 3 つが並びます。
+
+1. **ヘッダー** — 「最終更新」の時刻と［🔄 更新］ボタン
+2. **ホストカード** — ホストごとの状態
+3. **仮想マシンの一覧** — 全ホストの仮想マシン
+
+#### 🗂️ ホストカード
+
+| 表示 | 意味 |
+|---|---|
+| 🟢 管理者 | 正常です。仮想マシンの操作もできます |
+| 🟡 非管理者 | Agent が管理者権限なしで動いています。仮想マシンが表示されません（[❓ 困ったときは](#-困ったときは)） |
+| 🔴 到達不可 | Agent に接続できません。カードに理由が表示されます（[❓ 困ったときは](#-困ったときは)） |
+| CPU / メモリ / ディスク | 使用率のゲージ。🔵 通常 → 🟡 75% 以上 → 🔴 90% 以上 |
+
+#### 📋 仮想マシンの一覧
+
+| 列 | 内容 |
+|---|---|
+| ホスト | ホストカードの表示名 |
+| 名前 | 仮想マシンの名前 |
+| 状態 | 下の「状態の見かた」を参照 |
+| CPU (%)・メモリ (MB)・稼働時間 | 実行中の仮想マシンだけ表示されます |
+| バージョン | 仮想マシンの構成バージョン |
+| 操作 | 今の状態で実行できる操作のボタン（管理者だけに表示） |
+
+- 🔍 「名前」欄に入力すると、名前の一部で絞り込めます
+- 🏷️ ホストが 2 台以上のときは「ホスト」で絞り込めます
+- ↕️ 列の見出しをクリックすると並べ替えます
+- 📄 25 / 50 / 100 件ずつ表示できます
+
+#### 🚦 状態の見かた
+
+| 状態 | 意味 |
+|---|---|
+| 🟢 実行中 | 動いています |
+| ⚪ 停止 | 電源が切れています |
+| 🔵 保存済み | 状態を保存して止まっています（開始すると続きから動きます） |
+| 🟡 一時停止 | 一時停止しています |
+| ⏳ 起動中・停止中・保存中・一時停止中・再開中 | 切り替えの途中です。終わるまで操作ボタンは出ません |
+| ❔ 不明 | 上記以外の状態です。操作ボタンは出ません |
+
+### 🎛️ 仮想マシンを操作する
+
+「操作」列のボタンを押します（マウスを乗せると操作名が表示されます）。
+
+| | 操作 | 使える状態 | 何が起きるか |
+|---|---|---|---|
+| ▶️ | 開始 | 停止・保存済み | 仮想マシンを起動します |
+| ⏯️ | 再開 | 一時停止 | 一時停止から元に戻します |
+| ⏸️ | 一時停止 | 実行中 | 仮想マシンを一時停止します |
+| 💾 | 状態保存 | 実行中 | メモリの内容を保存して止めます |
+| 📴 | シャットダウン | 実行中 | ゲスト OS に正常な終了をお願いします（ゲスト側の統合サービスが必要） |
+| ⛔ | 強制停止 | 実行中・一時停止 | 電源を切ります。⚠️ 保存していないデータは失われます |
+
+操作の流れは次のとおりです。
+
+1. 🖱️ ボタンを押すと確認ダイアログが開きます。内容を確かめて実行します（［キャンセル］で中止）
+2. ⏳ 「処理中...」の間は、ほかの操作はできません
+3. 🔔 結果が画面右下に通知されます。失敗したときは画面上部にも理由が表示されます
+4. 🔄 一覧が最新の状態になり、📜 操作履歴に記録されます
+
+> 🔒 操作ボタンは、管理者のユーザーにだけ表示されます。最初に作られるアカウントは管理者です。
+
+### 📜 操作履歴
+
+メニューの「操作履歴」で開きます。新しい順に表示されます。
+
+| 列 | 内容 |
+|---|---|
+| 日時 | 操作した日時 |
+| ユーザー | 操作した人 |
+| ホスト・仮想マシン | 操作の対象 |
+| 操作 | 開始・強制停止など |
+| 結果 | ✅ 成功 / ❌ 失敗 |
+| メッセージ | 失敗した理由 |
+
+- 🔍 ホスト名か仮想マシン名の一部で検索できます（［検索］または Enter）
+- 📥 ［CSV］で全件をダウンロードできます（Excel でそのまま開けます）
+
+### 🔄 画面の更新
+
+- ⏱️ 10 秒ごとに自動で最新になります（間隔は設定で変えられます）
+- 🔄 ［更新］を押すと、すぐに最新にします
+- 🎛️ 操作のあとは自動で最新になります
+- 🕒 「最終更新」の時刻で、表示がいつの状態かを確認できます
+
+---
+
+## ⚙️ よく使う設定
+
+設定は各フォルダの `appsettings.Production.json` に書き、サービスを再起動すると反映されます（例: `Restart-Service HyperManager`）。
+
+| ソフトウェア | 設定 | 既定値 | 内容 |
+|---|---|---|---|
+| 🖥️ | `Agent:Hosts` | なし | 監視するホストの一覧（`Name`・`Url`・`ApiKey`） |
+| 🖥️ | `Monitor:IntervalSeconds` | `10` | 自動更新の間隔（秒） |
+| 🖥️ | `Monitor:Enable` | `true` | `false` にすると自動更新を止めます（［更新］ボタンのみ） |
+| 🖥️ | `Auth:ExpireMinutes` | `1440` | ログインの有効時間（分）。使っている間は延長されます |
+| 🖥️ | `Auth:AllowHttp` | `false` | `true` にすると HTTP でもログインできます（信頼できるネットワーク内だけ） |
+| 🖥️ | `Agent:QueryTimeoutSeconds` | `10` | ホストの状態を取得するときの待ち時間（秒） |
+| 🖥️ | `Agent:OperationTimeoutSeconds` | `330` | 操作の完了を待つ時間（秒） |
+| 🤖 | `Agent:ApiKey` | なし（必須） | API キー |
+| 🤖 | `http_ports` | `5100` | 待ち受けるポート |
+
+📖 すべての設定は [⚙️ 設定リファレンス](docs/configuration.md) を参照してください。
+
+---
+
+## 🔒 HTTPS と HTTP
+
+- 🔐 ログイン情報を守るため、本番では**既定でログイン状態（Cookie）を HTTPS でしか送りません**。そのまま HTTP で開くと、ログインしても画面に入れません。
+- 使い方は 3 通りです。
+
+| | 方法 | 設定 |
+|---|---|---|
+| 🅰️ | **HyperManager 自体で HTTPS にする**（おすすめ） | 手順 3️⃣ の 🅰️（`Kestrel` と証明書） |
+| 🅱️ | **HTTP のまま使う** | 手順 3️⃣ の 🅱️（`Auth:AllowHttp` を `true`）。⚠️ パスワードも暗号化されずに流れるため、信頼できるネットワーク内だけで |
+| 🔁 | **リバースプロキシ（IIS・nginx など）で HTTPS にする** | プロキシで HTTPS を受けて 8080 番へ転送（WebSocket も転送） |
+
+- 🖥️ サーバー自身のブラウザで `http://localhost:8080/` を開く場合は、設定を変えなくても HTTP で使えます。
+- 🤖 HyperManager と Agent の間は HTTP です。API キーは暗号化されずに流れるので、信頼できるネットワーク内で使ってください。
+
+📖 詳しくは [🩺 運用ガイド](docs/operations.md#-https-と-http) を参照してください。
+
+---
+
+## 🛡️ 安全に使うために
+
+- 🔑 最初の管理者パスワードは、推測されにくい値にして**初回起動の前に**設定する
+- 🔒 できるだけ HTTPS で使う（HTTP を許可するのは信頼できるネットワーク内だけ）
+- 🔑 API キーはホストごとに長いランダム値にする
+- 🧱 Agent の 5100 番ポートは HyperManager のサーバーからだけ許可する
+- 🏠 Agent との通信は、信頼できるネットワーク内に限る
+- ⚠️ 強制停止は最後の手段にする（保存していないデータが失われます）
+
+---
+
+## ❓ 困ったときは
+
+<details>
+<summary>🔴 ホストが「到達不可」になる</summary>
+
+- Agent のサービスが動いているか確認します: `Get-Service HyperManagerAgent`
+- `Agent:Hosts` の `Url`（アドレス・ポート）が正しいか、ファイアウォールで止められていないか確認します
+- HyperManager のサーバーから確認します: `curl.exe http://<ホスト>:5100/health`
+- 「認証に失敗しました (API キーを確認してください)」→ HyperManager と Agent の API キーが一致していません
+- 「応答がタイムアウトしました」→ ネットワークや Agent が混み合っています
+
+</details>
+
+<details>
+<summary>🟡 「非管理者」と表示され、仮想マシンが出てこない</summary>
+
+Agent が管理者権限なしで動いています。Hyper-V は権限のない利用者に仮想マシンを見せないため、一覧が空になります。
+手順 2️⃣ のとおり Windows サービスとして登録してください（標準の LocalSystem アカウントで管理者権限を持ちます）。
+
+</details>
+
+<details>
+<summary>❌ シャットダウンが失敗する</summary>
+
+ゲスト OS の協力が必要な操作です。
+
+- 仮想マシンの設定 →「統合サービス」→「オペレーティング システムのシャットダウン」が有効か確認します
+- ゲスト OS が起動しきっていない、または応答していない可能性があります
+- どうしても止まらないときは強制停止を使います（データが失われる可能性があります）
+
+</details>
+
+<details>
+<summary>❌ 「現在の状態では実行できません」と表示される</summary>
+
+ほかの人や Hyper-V マネージャーの操作で、状態がすでに変わっている可能性があります。［🔄 更新］を押してから操作し直してください。
+
+</details>
+
+<details>
+<summary>⏳ 操作がタイムアウトした</summary>
+
+メモリの大きい仮想マシンの状態保存などは時間がかかることがあります。Hyper-V 側では処理が続いている場合があるので、少し待ってから［🔄 更新］を押して状態を確認してください。
+
+</details>
+
+<details>
+<summary>🔐 ログインしても画面に入れない / パスワードを忘れた</summary>
+
+- HTTP で開いている場合は、HTTPS にするか `Auth:AllowHttp` を `true` にします（[🔒 HTTPS と HTTP](#-https-と-http)）
+- 「IDまたはパスワードが違います。」→ 入力を確認してください
+- パスワードを忘れたときは [🩺 運用ガイド](docs/operations.md#-パスワードを忘れたとき) の手順で作り直せます
+
+</details>
+
+<details>
+<summary>📄 ログを見たい</summary>
+
+`C:\HyperManager\log\` に 1 日 1 ファイルで出力されます（`HyperManager.Host_YYYYMMDD.log`・`HyperManager.Agent_YYYYMMDD.log`）。
+起動しないときは、Windows のイベント ビューアー（Windows ログ → Application）も確認してください。
+
+</details>
+
+---
+
+## 📚 もっと詳しく
+
+| ドキュメント | 内容 |
+|---|---|
+| ⚙️ [設定リファレンス](docs/configuration.md) | すべての設定項目 |
+| 🩺 [運用ガイド](docs/operations.md) | HTTPS・ログ・監視・バックアップ・更新 |
+| 🔄 [hv-monitor からの移行](docs/migration.md) | 旧 hv-monitor を使っていた方へ |
+| 📚 [ドキュメント一覧](docs/README.md) | 開発者向けを含むすべてのドキュメント |
+
+---
+
+## 📄 ライセンス
+
+[MIT License](LICENSE)

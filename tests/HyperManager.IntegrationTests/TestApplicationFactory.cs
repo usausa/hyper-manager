@@ -35,15 +35,18 @@ public sealed partial class TestApplicationFactory : WebApplicationFactory<Progr
     public static async Task LoginAsync(HttpClient client, CancellationToken cancellationToken)
     {
         var loginPage = await client.GetStringAsync(new Uri("/login", UriKind.Relative), cancellationToken);
-        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        using var form = CreateLoginForm(loginPage);
+        using var response = await client.PostAsync(new Uri("/auth/login", UriKind.Relative), form, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public static FormUrlEncodedContent CreateLoginForm(string loginPage) =>
+        new(new Dictionary<string, string>
         {
             ["name"] = "admin",
             ["password"] = "admin",
             ["__RequestVerificationToken"] = AntiforgeryTokenRegex().Match(loginPage).Groups[1].Value
         });
-        using var response = await client.PostAsync(new Uri("/auth/login", UriKind.Relative), form, cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
 
     protected override void Dispose(bool disposing)
     {

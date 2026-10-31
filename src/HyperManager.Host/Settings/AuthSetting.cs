@@ -5,6 +5,9 @@ public sealed class AuthSetting
     [Range(1, 43200)]
     public int ExpireMinutes { get; set; }
 
+    // Send the login cookie over HTTP as well (trusted network only). Otherwise HTTPS is required except in development
+    public bool AllowHttp { get; set; }
+
     [Required]
     public InitialAccountOption InitialAccount { get; set; } = default!;
 }
