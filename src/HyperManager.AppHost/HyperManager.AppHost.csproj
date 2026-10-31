@@ -1,0 +1,21 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <CodeAnalysisRuleSet>..\..\Analyzers.ruleset</CodeAnalysisRuleSet>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>3f6d1c52-8a47-4e0b-9d2f-6b1e7c9a4d18</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Transitive pin: GHSA-qhrr-8q5h-9q3h -->
+    <PackageReference Include="MessagePack" Version="2.5.307" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HyperManager.Agent\HyperManager.Agent.csproj" />
+    <ProjectReference Include="..\HyperManager.Host\HyperManager.Host.csproj" />
+  </ItemGroup>
+
+</Project>

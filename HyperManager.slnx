@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/Aspire/">
+    <Project Path="src/HyperManager.AppHost/HyperManager.AppHost.csproj" DefaultStartup="true" />
+  </Folder>
+  <Folder Name="/Application/">
+    <Project Path="src/HyperManager.Contracts/HyperManager.Contracts.csproj" />
+    <Project Path="src/HyperManager.Core/HyperManager.Core.csproj" />
+    <Project Path="src/HyperManager.Host/HyperManager.Host.csproj" />
+    <Project Path="src/HyperManager.Agent/HyperManager.Agent.csproj" />
+  </Folder>
+  <Folder Name="/Test/">
+    <Project Path="tests/HyperManager.UnitTests/HyperManager.UnitTests.csproj" />
+    <Project Path="tests/HyperManager.IntegrationTests/HyperManager.IntegrationTests.csproj" />
+    <Project Path="tests/HyperManager.AgentTests/HyperManager.AgentTests.csproj" />
+    <Project Path="tests/HyperManager.E2ETests/HyperManager.E2ETests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="AGENTS.md" />
+    <File Path="Analyzers.ruleset" />
+    <File Path="CodeCoverage.runsettings" />
+    <File Path="Database.sql" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="HyperManager.sln.DotSettings" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/architecture.md" />
+  </Folder>
+</Solution>

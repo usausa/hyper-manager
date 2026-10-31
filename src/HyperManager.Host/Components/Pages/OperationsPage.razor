@@ -1,0 +1,43 @@
+@page "/operations"
+@attribute [Authorize]
+
+<PageTitle>操作履歴</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">操作履歴</MudText>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudTextField @bind-Value="searchKeyword"
+                  Label="ホスト / 仮想マシン"
+                  MaxLength="@Length.Keyword"
+                  Clearable="true"
+                  Immediate="true"
+                  OnKeyDown="OnSearchKeyDown"
+                  Class="search-field" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync">検索</MudButton>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileDownload" Href="api/operations/csv">CSV</MudButton>
+</MudStack>
+
+<MudDataGrid @ref="grid" T="OperationLogEntity" ServerData="LoadServerData" SortMode="SortMode.None" Dense="true" Hover="true">
+    <Columns>
+        <PropertyColumn Property="x => x.ExecutedAt" Title="日時" Format="yyyy/MM/dd HH:mm:ss" />
+        <PropertyColumn Property="x => x.UserId" Title="ユーザー" />
+        <PropertyColumn Property="x => x.HostName" Title="ホスト" />
+        <PropertyColumn Property="x => x.VmName" Title="仮想マシン" />
+        <TemplateColumn Title="操作">
+            <CellTemplate>@context.Item.Operation.ToOperationLabel()</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="結果">
+            <CellTemplate>
+                <MudChip T="string" Color="@(context.Item.Success ? Color.Success : Color.Error)" Size="Size.Small" Variant="Variant.Text">@(context.Item.Success ? "成功" : "失敗")</MudChip>
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.Message" Title="メッセージ" />
+    </Columns>
+    <NoRecordsContent>
+        <MudText>操作履歴はありません。</MudText>
+    </NoRecordsContent>
+    <PagerContent>
+        <MudDataGridPager T="OperationLogEntity" />
+    </PagerContent>
+</MudDataGrid>

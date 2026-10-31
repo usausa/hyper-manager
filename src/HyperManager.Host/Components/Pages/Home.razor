@@ -1,0 +1,91 @@
+@page "/"
+@attribute [Authorize]
+
+<PageTitle>仮想マシン</PageTitle>
+
+<ProgressOverlay Visible="running" Message="処理中..." />
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">仮想マシン</MudText>
+    <MudSpacer />
+    <Condition Value="@(snapshot.UpdatedAt is not null)">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">最終更新 @snapshot.UpdatedAt?.ToString("HH:mm:ss", CultureInfo.CurrentCulture)</MudText>
+    </Condition>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" Disabled="@(loading || running)" OnClick="RefreshAsync">更新</MudButton>
+</MudStack>
+
+<Condition Value="HasError">
+    <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="ClearError">@errorMessage</MudAlert>
+</Condition>
+
+<Condition Value="NoHosts">
+    <MudAlert Severity="Severity.Info" Class="mb-4">監視対象のホストが登録されていません。設定の Agent:Hosts に Agent を登録してください。</MudAlert>
+</Condition>
+
+<MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" Class="mb-4">
+    @foreach (var host in snapshot.Hosts)
+    {
+        <HostCard @key="host.Name" Status="host" />
+    }
+</MudStack>
+
+<MudDataGrid T="VmRow" Items="Rows" SortMode="SortMode.Single" Dense="true" Hover="true" Striped="true" Loading="loading" RowsPerPage="50">
+    <ToolBarContent>
+        <Condition Value="HasMultipleHosts">
+            <MudSelect T="string" @bind-Value="hostFilter" Label="ホスト" Dense="true" Class="filter-field mr-4">
+                <MudSelectItem T="string" Value="@string.Empty">すべて</MudSelectItem>
+                @foreach (var host in snapshot.Hosts)
+                {
+                    <MudSelectItem T="string" Value="@host.Name">@host.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </Condition>
+        <MudTextField @bind-Value="nameFilter"
+                      Label="名前"
+                      Clearable="true"
+                      Immediate="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Class="filter-field" />
+        <MudSpacer />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="x => x.HostName" Title="ホスト" />
+        <PropertyColumn Property="x => x.Vm.Name" Title="名前" />
+        <PropertyColumn Property="x => x.Vm.State" Title="状態">
+            <CellTemplate>
+                <MudChip T="string" Color="@context.Item.Vm.State.ToColor()" Size="Size.Small" Variant="Variant.Filled">@context.Item.Vm.State.ToLabel()</MudChip>
+            </CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Vm.CpuUsagePercent" Title="CPU (%)" HeaderClass="text-right" CellClass="text-right">
+            <CellTemplate>@Formatter.FormatCpu(context.Item.Vm.CpuUsagePercent)</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Vm.MemoryUsageMb" Title="メモリ (MB)" HeaderClass="text-right" CellClass="text-right">
+            <CellTemplate>@Formatter.FormatMemory(context.Item.Vm.MemoryUsageMb)</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Vm.Uptime" Title="稼働時間" HeaderClass="text-right" CellClass="text-right">
+            <CellTemplate>@Formatter.FormatUptime(context.Item.Vm.Uptime)</CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Vm.Version" Title="バージョン">
+            <CellTemplate>@(context.Item.Vm.Version ?? "-")</CellTemplate>
+        </PropertyColumn>
+        <TemplateColumn Title="操作" Sortable="false" HeaderClass="text-center" CellClass="text-center text-nowrap">
+            <CellTemplate>
+                <Condition Value="canOperate">
+                    @foreach (var operation in VmOperationPolicy.AvailableOperations(context.Item.Vm.State))
+                    {
+                        <MudTooltip Text="@operation.ToLabel()">
+                            <MudIconButton Icon="@operation.ToIcon()" Color="@operation.ToColor()" Size="Size.Small" Disabled="running" OnClick="() => ExecuteAsync(context.Item, operation)" aria-label="@operation.ToLabel()" />
+                        </MudTooltip>
+                    }
+                </Condition>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText>仮想マシンが見つかりません。</MudText>
+    </NoRecordsContent>
+    <PagerContent>
+        <MudDataGridPager T="VmRow" PageSizeOptions="PageSizeOptions" />
+    </PagerContent>
+</MudDataGrid>

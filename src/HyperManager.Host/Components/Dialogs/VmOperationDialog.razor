@@ -1,0 +1,16 @@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Operation.ToLabel()</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>@Message</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">ホスト: @HostName</MudText>
+        <Condition Value="HasNote">
+            <MudAlert Severity="@NoteSeverity" Dense="true" Class="mt-4">@Note</MudAlert>
+        </Condition>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="@Operation.ToColor()" Variant="Variant.Filled" OnClick="OnOkClick">@Operation.ToLabel()</MudButton>
+        <MudButton Color="Color.Default" OnClick="OnCancelClick">キャンセル</MudButton>
+    </DialogActions>
+</MudDialog>

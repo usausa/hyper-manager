@@ -1,0 +1,55 @@
+<MudPaper Class="host-card pa-3" Elevation="0" Outlined="true">
+    <MudStack Spacing="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudIcon Icon="@Icons.Material.Filled.Dns" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle2">@Status.Name</MudText>
+            <Condition Value="@(Status.Info is not null)">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@Status.Info?.Name</MudText>
+            </Condition>
+            <MudSpacer />
+            <Condition Value="@(!Status.IsReachable)">
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.CloudOff">到達不可</MudChip>
+            </Condition>
+            <Condition Value="@(Status.IsReachable && (Status.Info?.IsElevated ?? false))">
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.AdminPanelSettings">管理者</MudChip>
+            </Condition>
+            <Condition Value="@(Status.IsReachable && !(Status.Info?.IsElevated ?? false))">
+                <MudTooltip Text="VM の操作には管理者権限が必要です。Agent を管理者として実行してください。">
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Warning">非管理者</MudChip>
+                </MudTooltip>
+            </Condition>
+        </MudStack>
+
+        <Condition Value="@(!Status.IsReachable)">
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="host-error">@Status.Error</MudText>
+        </Condition>
+
+        @if (Status.Metrics is { } metrics)
+        {
+            <div>
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.caption">CPU</MudText>
+                    <MudText Typo="Typo.caption">@Formatter.FormatPercent(metrics.CpuUsagePercent)</MudText>
+                </div>
+                <MudProgressLinear Color="@Formatter.UsageColor(metrics.CpuUsagePercent)" Value="@metrics.CpuUsagePercent" Class="my-1" />
+            </div>
+            <div>
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.caption">メモリ</MudText>
+                    <MudText Typo="Typo.caption">@Formatter.FormatMegabytes(metrics.UsedMemoryMb) / @Formatter.FormatMegabytes(metrics.TotalMemoryMb)</MudText>
+                </div>
+                <MudProgressLinear Color="@Formatter.UsageColor(Formatter.MemoryUsedPercent(metrics))" Value="@Formatter.MemoryUsedPercent(metrics)" Class="my-1" />
+            </div>
+            @foreach (var disk in metrics.Disks)
+            {
+                <div>
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.caption">ディスク @disk.Name</MudText>
+                        <MudText Typo="Typo.caption">空き @Formatter.FormatBytes(disk.FreeBytes) / @Formatter.FormatBytes(disk.TotalBytes)</MudText>
+                    </div>
+                    <MudProgressLinear Color="@Formatter.UsageColor(Formatter.DiskUsedPercent(disk))" Value="@Formatter.DiskUsedPercent(disk)" Class="my-1" />
+                </div>
+            }
+        }
+    </MudStack>
+</MudPaper>
