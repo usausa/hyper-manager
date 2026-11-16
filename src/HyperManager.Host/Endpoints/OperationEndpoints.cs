@@ -1,5 +1,7 @@
 namespace HyperManager.Host.Endpoints;
 
+using CsvHelper;
+
 using Microsoft.AspNetCore.Http.HttpResults;
 
 using Smart.Mapper;
@@ -48,6 +50,13 @@ public static partial class OperationMapper
 {
     [Mapper]
     public static partial OperationListEntry ToListEntry(this OperationLogEntity entity);
+}
+
+[CsvRecordMap(typeof(OperationLogEntity))]
+public sealed partial class OperationLogCsvMap
+{
+    [CsvFormat("MM/dd/yyyy HH:mm:ss")]
+    public DateTime ExecutedAt { get; set; }
 }
 
 //--------------------------------------------------------------------------------
@@ -105,7 +114,7 @@ public static class OperationEndpoints
             async stream =>
             {
                 await using var writer = new StreamWriter(stream, new UTF8Encoding(true));
-                await using var csv = new CsvHelper.CsvWriter(writer, CultureInfo.InvariantCulture);
+                await using var csv = CsvWriter.Create(writer, new CsvWriterOptions { Quoting = CsvQuoting.WhenNeededOrWhitespace });
                 await csv.WriteRecordsAsync(operationService.QueryHistoryExportEnumerable(cancellationToken), cancellationToken);
             },
             "text/csv",

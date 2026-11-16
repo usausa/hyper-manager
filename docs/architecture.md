@@ -70,11 +70,11 @@ flowchart LR
 
 | プロジェクト | TFM | 役割 |
 |---|---|---|
-| 📜 `HyperManager.Contracts` | net10.0 | Agent API の契約（DTO・パス・ヘッダー名）。Agent とクライアントで共有 |
-| 🧠 `HyperManager.Core` | net10.0 | HyperManager 側の業務ロジック（監視・操作・履歴・アカウント・DB アクセス・Agent クライアント） |
-| 🖥️ `HyperManager.Host` | net10.0 | 画面（Blazor Server / MudBlazor）、Web API、ログイン、運用機能 |
-| 🤖 `HyperManager.Agent` | net10.0-windows | Hyper-V ホストの API サーバー（Windows 専用） |
-| 🚀 `HyperManager.AppHost` | net10.0 | 開発用の Aspire AppHost（Agent と Host を一緒に起動） |
+| 📜 `HyperManager.Contracts` | net11.0 | Agent API の契約（DTO・パス・ヘッダー名）。Agent とクライアントで共有 |
+| 🧠 `HyperManager.Core` | net11.0 | HyperManager 側の業務ロジック（監視・操作・履歴・アカウント・DB アクセス・Agent クライアント） |
+| 🖥️ `HyperManager.Host` | net11.0 | 画面（Blazor Server / MudBlazor）、Web API、ログイン、運用機能 |
+| 🤖 `HyperManager.Agent` | net11.0-windows | Hyper-V ホストの API サーバー（Windows 専用） |
+| 🚀 `HyperManager.AppHost` | net11.0 | 開発用の Aspire AppHost（Agent と Host を一緒に起動） |
 
 > 💡 HyperManager は CIM を使わないので、Windows 以外でも動きます。
 

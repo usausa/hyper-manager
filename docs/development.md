@@ -8,8 +8,8 @@ HyperManager を開発するための情報をまとめます。
 
 | | 用途 |
 |---|---|
-| 🟣 .NET 10 SDK | ビルド・実行 |
-| 🪟 Windows | Agent と Agent のテスト（`net10.0-windows`）のビルド・実行 |
+| 🟣 .NET 11 SDK | ビルド・実行 |
+| 🪟 Windows | Agent と Agent のテスト（`net11.0-windows`）のビルド・実行 |
 | ⚙️ Hyper-V（任意） | 実際の仮想マシンでの確認 |
 | 🧑‍💻 Visual Studio / Rider（任意） | `HyperManager.AppHost` をスタートアップにして開発 |
 | 🎭 Playwright のブラウザ | E2E テスト |
@@ -132,7 +132,7 @@ dotnet run --project tests/HyperManager.UnitTests -- --coverage --coverage-outpu
 ```powershell
 # ブラウザを入手する（初回のみ。ビルドで出力されるスクリプトを使う）
 dotnet build tests/HyperManager.E2ETests
-pwsh tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright.ps1 install
+pwsh tests/HyperManager.E2ETests/bin/Debug/net11.0/playwright.ps1 install
 
 # 実行する（既定は Chromium・画面なし）
 dotnet run --project tests/HyperManager.E2ETests
@@ -147,8 +147,8 @@ $env:BROWSER = "firefox"; dotnet run --project tests/HyperManager.E2ETests; Remo
 $env:PWDEBUG = "1"; dotnet run --project tests/HyperManager.E2ETests; Remove-Item Env:PWDEBUG
 ```
 
-- 🧾 失敗したテストだけ、操作ごとの画面・DOM・通信・コンソールを記録したトレースを `tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright-traces/<テストの表示名>.zip` に残します
-- 🔍 `pwsh tests/HyperManager.E2ETests/bin/Debug/net10.0/playwright.ps1 show-trace <zip>` か https://trace.playwright.dev で開けます
+- 🧾 失敗したテストだけ、操作ごとの画面・DOM・通信・コンソールを記録したトレースを `tests/HyperManager.E2ETests/bin/Debug/net11.0/playwright-traces/<テストの表示名>.zip` に残します
+- 🔍 `pwsh tests/HyperManager.E2ETests/bin/Debug/net11.0/playwright.ps1 show-trace <zip>` か https://trace.playwright.dev で開けます
 
 ---
 

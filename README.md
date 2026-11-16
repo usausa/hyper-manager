@@ -46,7 +46,7 @@ flowchart LR
 | | 🖥️ HyperManager | 🤖 Agent |
 |---|---|---|
 | OS | Windows または Linux | Windows 10 / 11（Pro 以上）、Windows Server（**Hyper-V が有効**） |
-| ランタイム | ASP.NET Core 10 ランタイム | ASP.NET Core 10 ランタイム |
+| ランタイム | ASP.NET Core 11 ランタイム | ASP.NET Core 11 ランタイム |
 | 権限 | 一般ユーザーで動作 | **管理者権限**（Windows サービスとして動かせば満たせます） |
 | ポート（例） | 8443（HTTPS）または 8080（HTTP） | 5100 |
 | ブラウザ | Edge / Chrome / Firefox の最新版 | — |
@@ -59,7 +59,7 @@ flowchart LR
 
 ### 1️⃣ 配布ファイルを作る
 
-ソースコードのフォルダで実行します（.NET 10 SDK が必要です）。
+ソースコードのフォルダで実行します（.NET 11 SDK が必要です）。
 
 ```powershell
 dotnet publish src/HyperManager.Agent -c Release -o publish\Agent

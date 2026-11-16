@@ -95,7 +95,7 @@ public sealed class AgentClient : IAgentClient
     private static Uri BuildUri(Uri baseUrl, string path)
     {
         // Keep the path of the base URL (e.g. prefix of a reverse proxy)
-        var root = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
+        var root = baseUrl.AbsoluteUri.EndsWith('/', StringComparison.Ordinal) ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
         return new Uri(root, path);
     }
 
